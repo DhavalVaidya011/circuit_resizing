@@ -7,6 +7,7 @@ class Gate:
         self.qubits = qubits
         self.label = label
 
+# The following function will check if there are dependencies between two gates
 def are_dependencies(gate_prev, gate):   
     qubits1 = gate_prev.qubits
     qubits2 = gate.qubits
@@ -15,6 +16,7 @@ def are_dependencies(gate_prev, gate):
     else:
         return False
 
+# The following function will create a dependency graph
 def create_dependency_graph(circuit):
     graph = {}
     for gate in circuit:
@@ -30,6 +32,8 @@ def create_dependency_graph(circuit):
                 graph[gate.label].add(gate_prev.label)
     return graph
 
+# The following function will create a qubit interaction graph. Two qubits are considered interacting if there
+# is a two qubit gate acting on them
 def create_qubit_interaction_graph(circuit):
     last_gate = {}
     interaction_graph = {}
@@ -47,8 +51,10 @@ def create_qubit_interaction_graph(circuit):
         else:
             initial_list = [qubits[0]]
             interaction_graph[qubits[1]] = initial_list
-    return interaction_graph, last_gate
+    return interaction_graph, last_gate # last_gate is the list containing the last gates of each qubit in the circuit
 
+# Dynamic Programming implementation to find the best set of qubits to maximize resizing and minimise the number
+# of physical qubits in the circuit
 def resizing_opportunities(qubit_reuse_pairs, qubit_interaction_graph):
     n = len(qubit_interaction_graph)
     dp = [[] for _ in range(len(qubit_reuse_pairs))]
@@ -68,8 +74,11 @@ def resizing_opportunities(qubit_reuse_pairs, qubit_interaction_graph):
         if not flag:
             dp[ind] = new_list
             value_dp[ind] = n - 1
-    return dp, value_dp
+    return dp, value_dp 
+    #value_dp will return the minimum number of qubits needed is the corresponding 
+    # resizing opportunity in dp is selected
 
+#This is Depth-First-Search which will be used to find cyclical dependency among qubits
 def dfs(dependency_graph, start_gate, target_gate):
     if start_gate not in dependency_graph or target_gate not in dependency_graph:
         return False
@@ -80,7 +89,7 @@ def dfs(dependency_graph, start_gate, target_gate):
             return True
     return False
 
-
+# This function will basically arrange the tuples in order such that in (qi, qj), qi is reused by qj
 def correct_tuples(reuse_pairs, last_gate, circuit):
     pairs_to_delete = []
     pairs_to_add = []
@@ -103,6 +112,8 @@ def correct_tuples(reuse_pairs, last_gate, circuit):
         reuse_pairs.append(pair)
     return reuse_pairs
 
+# This function checks the two conditions for qubit_reusability: (i) No gate among those qubits
+# (ii) No future dependence between the qubits.
 def check_conditions(qubit_interaction_graph, dependency_graph, circuit):
     reuse_pair_candidate = []
     n = len(qubit_interaction_graph)
