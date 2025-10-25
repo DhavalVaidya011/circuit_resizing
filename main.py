@@ -53,30 +53,40 @@ def create_qubit_interaction_graph(circuit):
             interaction_graph[qubits[1]] = initial_list
     return interaction_graph, last_gate # last_gate is the list containing the last gates of each qubit in the circuit
 
-# Dynamic Programming implementation to find the best set of qubits to maximize resizing and minimise the number
-# of physical qubits in the circuit
 def resizing_opportunities(qubit_reuse_pairs, qubit_interaction_graph):
     n = len(qubit_interaction_graph)
-    dp = [[] for _ in range(len(qubit_reuse_pairs))]
-    value_dp = [n] * len(qubit_reuse_pairs) 
+    dp = [[[] for _ in range(len(qubit_reuse_pairs) + 1)] for _ in range(len(qubit_reuse_pairs) + 1)]
+    value_dp = [[0 for _ in range(len(qubit_reuse_pairs) + 1)] for _ in range(len(qubit_reuse_pairs) + 1)]
     for ind in range(len(qubit_reuse_pairs)):
-        new_list = list(qubit_reuse_pairs[ind])
-        ind2 = ind - 1
-        flag = False
-        while ind2 >= 0:
-            if new_list[0] in dp[ind2] or new_list[1] in dp[ind2]:
-                ind2 -= 1
+        dp[ind][0] = qubit_reuse_pairs[ind]
+        dp[0][ind] = qubit_reuse_pairs[ind]
+        value_dp[ind][0] = 1
+        value_dp[0][ind] = 1
+    for ind in range(1, len(qubit_reuse_pairs) + 1):
+        for ind2 in range(1, len(qubit_reuse_pairs) + 1):
+            # new_list = list(qubit_reuse_pairs[ind][ind2])
+            qubs = list(qubit_reuse_pairs[ind2-1])
+            if qubs[0] in dp[ind][ind2-1] or qubs[1] in dp[ind][ind2-1]:
+                if value_dp[ind][ind2-1] == value_dp[ind2-1][ind]:
+                    dp[ind][ind2] = dp[ind][ind2-1]
+                    value_dp[ind][ind2] = value_dp[ind][ind2-1]
+                elif value_dp[ind][ind2-1] > value_dp[ind2-1][ind]:
+                    dp[ind][ind2] = dp[ind][ind2-1]
+                    value_dp[ind][ind2] = value_dp[ind][ind2-1]
+                elif value_dp[ind][ind2-1] < value_dp[ind2-1][ind]:
+                    dp[ind][ind2] = dp[ind2-1][ind]
+                    value_dp[ind][ind2] = value_dp[ind2-1][ind]
             else:
-                dp[ind] = new_list + dp[ind2]
-                value_dp[ind] = value_dp[ind2] - 1
-                flag = True
-                break
-        if not flag:
-            dp[ind] = new_list
-            value_dp[ind] = n - 1
-    return dp, value_dp 
-    #value_dp will return the minimum number of qubits needed is the corresponding 
-    # resizing opportunity in dp is selected
+                if (1 + value_dp[ind][ind2-1]) == value_dp[ind2-1][ind]:
+                    dp[ind][ind2] = list(dp[ind][ind2-1]) + qubs
+                    value_dp[ind][ind2] = 1 + value_dp[ind][ind2-1]
+                elif (1 + value_dp[ind][ind2-1]) > value_dp[ind2-1][ind]:
+                    dp[ind][ind2] = list(dp[ind][ind2-1]) + qubs
+                    value_dp[ind][ind2] = 1 + value_dp[ind][ind2-1]
+                elif (1 + value_dp[ind][ind2-1]) < value_dp[ind2-1][ind]:
+                    dp[ind][ind2] = dp[ind2-1][ind]
+                    value_dp[ind][ind2] = value_dp[ind2-1][ind]
+    return dp, value_dp
 
 #This is Depth-First-Search which will be used to find cyclical dependency among qubits
 def dfs(dependency_graph, start_gate, target_gate):
@@ -177,13 +187,23 @@ if __name__ == "__main__":
     qubit_interaction_graph, last_gate_dict = create_qubit_interaction_graph(circuit)
     qubit_reuse_pairs = check_conditions(qubit_interaction_graph, dependency_graph, circuit)
     qubit_reuse_pairs = correct_tuples(qubit_reuse_pairs, last_gate_dict, circuit)
+    
     dp, value_dp = resizing_opportunities(qubit_reuse_pairs, qubit_interaction_graph)
-    print('The following resizing opportunities are present in the given circuit:')
-    optimal_qubit_resize = value_dp[len(value_dp)-1]
-    for i in range(len(dp) - 1, -1, -1):
-        print('---------------------------')
-        if value_dp[i] != optimal_qubit_resize:
-            break
-        for j in range(0, len(dp[i])-1, 2):
-            print(f'Qubit {dp[i][j]} can be reused by qubit {dp[i][j+1]}')
-        print(f'The number of qubits can be reduced from {len(qubit_interaction_graph)} to {value_dp[i]} using this resizing.')
+    optimal_qubit_resize = value_dp[len(qubit_reuse_pairs)][len(qubit_reuse_pairs)]
+    set_of_tuples = set()
+
+    for i in range(len(qubit_reuse_pairs), -1, -1):
+        for j in range(len(qubit_reuse_pairs), -1, -1):
+            if value_dp[i][j] != optimal_qubit_resize:
+                continue
+            temp_list = []
+            for ind in range(0, len(dp[i][j]), 2):
+                temp_list.append((dp[i][j][ind], dp[i][j][ind+1]))
+            temp_list.sort()
+            set_of_tuples.add(tuple(temp_list))
+
+    print(f'The following best resizing opportunities are present in the given circuit which will reduce the circuit size from {len(qubit_interaction_graph)} to {len(qubit_interaction_graph) - optimal_qubit_resize}:')
+    for opportunities in set_of_tuples:
+        print('-------------------------------')
+        for pairs in opportunities:
+            print(f'Qubit {pairs[0]} can be reused for qubit {pairs[1]}')
